@@ -1,5 +1,5 @@
 {
-  "name": "RandomTowerDefense",
+  "name": "TacticalTowerDefense",
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {

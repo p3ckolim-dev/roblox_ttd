@@ -38,7 +38,7 @@ function countKeyedEntries(tableBody) {
 
 test("rojo project maps server, client, shared, and replicated storage roots", () => {
   const project = JSON.parse(read("default.project.json"));
-  assert.equal(project.name, "RandomTowerDefense");
+  assert.equal(project.name, "TacticalTowerDefense");
   const game = project.tree;
   assert.ok(game.ReplicatedStorage.Shared, "Shared modules should replicate to clients");
   assert.ok(game.ServerScriptService.Server, "Server services should map into ServerScriptService");

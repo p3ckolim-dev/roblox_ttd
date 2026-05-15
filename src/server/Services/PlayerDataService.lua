@@ -18,7 +18,7 @@ local function getStore()
 	end
 
 	local ok, result = pcall(function()
-		return DataStoreService:GetDataStore("RandomTowerDefenseProfileV1")
+		return DataStoreService:GetDataStore("TacticalTowerDefenseProfileV1")
 	end)
 
 	if ok then

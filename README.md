@@ -1,6 +1,6 @@
-# Random Tower Defense
+# Tactical Tower Defense
 
-Rojo-based Roblox MVP for a personal-lane random tower defense game with TFT-inspired original synergies.
+Rojo-based Roblox MVP for Tactical Tower Defense, a personal-lane tower defense game with TFT-inspired original synergies.
 
 ## MVP Loop
 

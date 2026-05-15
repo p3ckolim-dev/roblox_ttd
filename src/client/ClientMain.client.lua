@@ -16,7 +16,7 @@ local stateUpdateRemote = remotesFolder:WaitForChild(RemoteNames.StateUpdate)
 local requestSnapshot = remotesFolder:WaitForChild(RemoteNames.RequestSnapshot)
 
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "RandomTowerDefenseHud"
+screenGui.Name = "TacticalTowerDefenseHud"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 

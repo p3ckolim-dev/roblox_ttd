@@ -30,10 +30,10 @@ local ENEMY_SIZES = {
 	Boss = Vector3.new(5.0, 5.0, 5.0),
 }
 
-local rootFolder = Workspace:FindFirstChild("RandomTowerDefense")
+local rootFolder = Workspace:FindFirstChild("TacticalTowerDefense")
 if rootFolder == nil then
 	rootFolder = Instance.new("Folder")
-	rootFolder.Name = "RandomTowerDefense"
+	rootFolder.Name = "TacticalTowerDefense"
 	rootFolder.Parent = Workspace
 end
 
