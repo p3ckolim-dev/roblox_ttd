@@ -9,12 +9,13 @@ local WorldService = {}
 
 local GRID_COLUMNS = BoardService.GRID_COLUMNS
 local GRID_ROWS = BoardService.GRID_ROWS
-local CELL_SIZE = 7
-local TILE_GAP = 0.55
+local CELL_SIZE = 6
+local TILE_GAP = 0.35
 local TILE_HEIGHT = 0.45
 local SURFACE_Y = 0.35
-local BOARD_SPACING = 60
+local BOARD_SPACING = 120
 local ENEMY_Y = 2.25
+local BENCH_Z = (GRID_ROWS + 2) * CELL_SIZE
 
 local ENEMY_COLORS = {
 	Basic = Color3.fromRGB(226, 232, 240),
@@ -54,6 +55,12 @@ local function originForSlot(slot)
 	local x = ((slot - 1) % 3) * BOARD_SPACING
 	local z = math.floor((slot - 1) / 3) * BOARD_SPACING
 	return Vector3.new(x, 0, z)
+end
+
+local function boardCenter(origin)
+	local boardWidth = (GRID_COLUMNS + 1) * CELL_SIZE
+	local boardDepth = (GRID_ROWS + 3) * CELL_SIZE
+	return origin + Vector3.new(boardWidth / 2, 0, boardDepth / 2 - CELL_SIZE / 2)
 end
 
 local function pathPosition(origin, progress, pathLength)
@@ -107,7 +114,14 @@ function WorldService.CreateBoardModel(player, slot)
 	local origin = originForSlot(slot)
 	folder:SetAttribute("OriginX", origin.X)
 	folder:SetAttribute("OriginZ", origin.Z)
-	createPart("Base", Vector3.new(58, 0.6, 44), origin + Vector3.new(24.5, -0.3, 17.5), Color3.fromRGB(24, 28, 35), folder)
+	local boardWidth = (GRID_COLUMNS + 1) * CELL_SIZE
+	local boardDepth = (GRID_ROWS + 3) * CELL_SIZE
+	local center = boardCenter(origin)
+	createPart("Base", Vector3.new(boardWidth + CELL_SIZE * 2, 0.6, boardDepth + CELL_SIZE), center + Vector3.new(0, -0.3, 0), Color3.fromRGB(24, 28, 35), folder)
+
+	local startPoint = createPart("StartPoint", Vector3.new(4.2, 0.18, 4.2), center + Vector3.new(0, SURFACE_Y + 0.18, 0), Color3.fromRGB(120, 210, 255), folder, Enum.Material.Neon)
+	startPoint.CanQuery = false
+	startPoint:SetAttribute("StartPoint", true)
 
 	for row = 1, GRID_ROWS do
 		for column = 1, GRID_COLUMNS do
@@ -129,12 +143,45 @@ function WorldService.CreateBoardModel(player, slot)
 		createPart(`PathRight_{row}`, Vector3.new(3.2, 0.32, CELL_SIZE - 1), origin + Vector3.new((GRID_COLUMNS + 1) * CELL_SIZE, 0.18, row * CELL_SIZE), pathColor, folder)
 	end
 
+	for slotIndex = 1, BoardService.BENCH_SIZE do
+		local benchColumn = ((GRID_COLUMNS - BoardService.BENCH_SIZE) / 2) + slotIndex
+		local position = origin + Vector3.new(benchColumn * CELL_SIZE, SURFACE_Y, BENCH_Z)
+		local benchSlot = createPart(`BenchSlot_{slotIndex}`, Vector3.new(CELL_SIZE - TILE_GAP, TILE_HEIGHT, CELL_SIZE - TILE_GAP), position, Color3.fromRGB(58, 48, 72), folder)
+		benchSlot:SetAttribute("BenchSlot", slotIndex)
+		createPart(`BenchMarker_{slotIndex}`, Vector3.new(1.1, 0.08, 1.1), position + Vector3.new(0, TILE_HEIGHT / 2 + 0.08, 0), Color3.fromRGB(255, 190, 96), folder, Enum.Material.Neon)
+	end
+
 	return folder
 end
 
 function WorldService.AttachBoard(board, folder)
 	board.worldFolder = folder
 	board.worldOrigin = Vector3.new(folder:GetAttribute("OriginX") or 0, 0, folder:GetAttribute("OriginZ") or 0)
+end
+
+function WorldService.BoardCenter(board)
+	return boardCenter(getBoardOrigin(board))
+end
+
+local function pivotCharacterToBoardCenter(character, board)
+	if character == nil or character.Parent == nil then
+		return
+	end
+
+	local center = WorldService.BoardCenter(board)
+	character:PivotTo(CFrame.new(center + Vector3.new(0, 6, 0)))
+end
+
+function WorldService.SpawnPlayerAtBoardCenter(player, board)
+	local character = player.Character
+	if character then
+		pivotCharacterToBoardCenter(character, board)
+		return
+	end
+
+	task.spawn(function()
+		pivotCharacterToBoardCenter(player.CharacterAdded:Wait(), board)
+	end)
 end
 
 function WorldService.CreateTowerVisual(board, tower)
@@ -157,6 +204,32 @@ function WorldService.CreateTowerVisual(board, tower)
 	local part = createPart(tower.instanceId, Vector3.new(3.5, 5, 3.5), cell.Position + Vector3.new(0, 2.6, 0), originColor, board.worldFolder)
 	part.Shape = Enum.PartType.Cylinder
 	part:SetAttribute("TowerId", tower.towerId)
+	part:SetAttribute("TowerInstanceId", tower.instanceId)
+	part:SetAttribute("Rarity", tower.rarity)
+end
+
+function WorldService.CreateBenchTowerVisual(board, tower, slot)
+	if board.worldFolder == nil then
+		return
+	end
+
+	local existing = board.worldFolder:FindFirstChild(`BenchTower_{tower.instanceId}`)
+	if existing then
+		existing:Destroy()
+	end
+
+	local definition = TowerConfig.Towers[tower.towerId]
+	local originColor = TowerConfig.Origins[definition.origin].color
+	local benchSlot = board.worldFolder:FindFirstChild(`BenchSlot_{slot}`)
+	if benchSlot == nil then
+		return
+	end
+
+	local part = createPart(`BenchTower_{tower.instanceId}`, Vector3.new(3.0, 3.0, 3.0), benchSlot.Position + Vector3.new(0, 1.9, 0), originColor, board.worldFolder)
+	part.Shape = Enum.PartType.Cylinder
+	part:SetAttribute("TowerId", tower.towerId)
+	part:SetAttribute("TowerInstanceId", tower.instanceId)
+	part:SetAttribute("BenchSlot", slot)
 	part:SetAttribute("Rarity", tower.rarity)
 end
 
@@ -219,10 +292,16 @@ local function towerPosition(board, row, column)
 	return getBoardOrigin(board)
 end
 
-local function enemyPosition(board, enemyId)
+local function enemyPosition(board, event)
 	local enemyFolder = board.worldFolder and board.worldFolder:FindFirstChild("EnemyVisuals")
-	local enemy = enemyFolder and enemyFolder:FindFirstChild(enemyId)
-	return enemy and enemy.Position or nil
+	local enemy = enemyFolder and enemyFolder:FindFirstChild(event.targetId)
+	if enemy then
+		return enemy.Position
+	end
+	if event.targetProgress then
+		return pathPosition(getBoardOrigin(board), event.targetProgress, board.pathLength)
+	end
+	return nil
 end
 
 function WorldService.CreateAttackBeam(board, event)
@@ -231,16 +310,20 @@ function WorldService.CreateAttackBeam(board, event)
 	end
 
 	local startPosition = towerPosition(board, event.row, event.column)
-	local endPosition = enemyPosition(board, event.targetId)
+	local endPosition = enemyPosition(board, event)
 	if endPosition == nil then
 		return
 	end
 
 	local midpoint = (startPosition + endPosition) / 2
 	local distance = (startPosition - endPosition).Magnitude
-	local beam = createPart("AttackBeam", Vector3.new(0.18, 0.18, distance), midpoint, Color3.fromRGB(120, 210, 255), board.worldFolder, Enum.Material.Neon)
+	local beam = createPart("AttackBeam", Vector3.new(0.32, 0.32, distance), midpoint, Color3.fromRGB(120, 210, 255), board.worldFolder, Enum.Material.Neon)
 	beam.CFrame = CFrame.lookAt(midpoint, endPosition)
-	Debris:AddItem(beam, 0.12)
+	Debris:AddItem(beam, 0.22)
+
+	local impact = createPart("AttackImpact", Vector3.new(1.6, 1.6, 1.6), endPosition, Color3.fromRGB(255, 245, 150), board.worldFolder, Enum.Material.Neon)
+	impact.Shape = Enum.PartType.Ball
+	Debris:AddItem(impact, 0.18)
 end
 
 function WorldService.CreateMergeBurst(board)
@@ -281,6 +364,13 @@ function WorldService.RefreshBoard(board)
 
 	for _, tower in ipairs(BoardService.GetBoardTowers(board)) do
 		WorldService.CreateTowerVisual(board, tower)
+	end
+
+	for slot = 1, BoardService.BENCH_SIZE do
+		local tower = board.bench[slot]
+		if tower then
+			WorldService.CreateBenchTowerVisual(board, tower, slot)
+		end
 	end
 end
 

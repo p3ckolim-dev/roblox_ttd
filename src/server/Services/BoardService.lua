@@ -2,13 +2,15 @@ local HttpService = game:GetService("HttpService")
 
 local BoardService = {}
 
-local GRID_COLUMNS = 6
-local GRID_ROWS = 4
+local GRID_COLUMNS = 10
+local GRID_ROWS = 10
 local BENCH_SIZE = 8
+local PATH_LENGTH = 2 * ((GRID_COLUMNS + 1) + (GRID_ROWS + 1)) * 4
 
 BoardService.GRID_COLUMNS = GRID_COLUMNS
 BoardService.GRID_ROWS = GRID_ROWS
 BoardService.BENCH_SIZE = BENCH_SIZE
+BoardService.PATH_LENGTH = PATH_LENGTH
 
 local function emptyGrid()
 	local grid = {}
@@ -38,7 +40,9 @@ function BoardService.CreateBoard(player)
 		enemies = {},
 		attackEvents = {},
 		mergeEvents = {},
-		pathLength = 128,
+		pathLength = PATH_LENGTH,
+		enemyLimit = 100,
+		aliveEnemyCount = 0,
 	}
 end
 
@@ -114,17 +118,40 @@ end
 function BoardService.SerializeEnemies(board)
 	local enemies = {}
 	for _, enemy in ipairs(board.enemies) do
-		if enemy.alive then
+		if enemy.alive and enemy.progress >= 0 then
 			table.insert(enemies, {
 				id = enemy.id,
 				enemyType = enemy.enemyType,
 				health = enemy.health,
 				maxHealth = enemy.maxHealth,
 				progress = enemy.progress,
+				speed = enemy.speed,
 			})
 		end
 	end
 	return enemies
+end
+
+function BoardService.CountVisibleEnemies(board)
+	local count = 0
+	for _, enemy in ipairs(board.enemies) do
+		if enemy.alive and enemy.progress >= 0 then
+			count += 1
+		end
+	end
+	return count
+end
+
+function BoardService.SerializeWorldOrigin(board)
+	if board.worldOrigin == nil then
+		return nil
+	end
+
+	return {
+		x = board.worldOrigin.X,
+		y = board.worldOrigin.Y,
+		z = board.worldOrigin.Z,
+	}
 end
 
 function BoardService.RemoveTower(board, instanceId)
@@ -164,6 +191,10 @@ function BoardService.Serialize(board)
 		synergies = board.synergies,
 		enemies = BoardService.SerializeEnemies(board),
 		mergeEvents = board.mergeEvents,
+		pathLength = board.pathLength,
+		worldOrigin = BoardService.SerializeWorldOrigin(board),
+		enemyLimit = board.enemyLimit,
+		aliveEnemyCount = board.aliveEnemyCount,
 	}
 end
 

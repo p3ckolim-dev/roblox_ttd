@@ -1,5 +1,7 @@
 local EnemyConfig = {}
 
+EnemyConfig.SpeedMultiplier = 4.5
+
 EnemyConfig.Enemies = {
 	Basic = {
 		displayName = "Drifter",

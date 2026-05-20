@@ -16,20 +16,20 @@ function WaveService.SpawnWave(board, waveNumber)
 	end
 
 	board.wave = waveNumber
-	board.enemies = {}
 
 	local enemyDefinition = EnemyConfig.Enemies[wave.enemyType]
 	for index = 1, wave.count do
 		local health = math.floor(enemyDefinition.health * wave.healthMultiplier)
+		local spawnDelay = (index - 1) * wave.spawnInterval
 		table.insert(board.enemies, {
 			id = `{waveNumber}:{index}`,
 			enemyType = wave.enemyType,
 			health = health,
 			maxHealth = health,
-			speed = enemyDefinition.speed,
+			speed = enemyDefinition.speed * EnemyConfig.SpeedMultiplier,
 			reward = enemyDefinition.reward,
 			lifeDamage = enemyDefinition.lifeDamage,
-			progress = -index * wave.spawnInterval * enemyDefinition.speed,
+			progress = -spawnDelay * enemyDefinition.speed * EnemyConfig.SpeedMultiplier * 4,
 			alive = true,
 		})
 	end

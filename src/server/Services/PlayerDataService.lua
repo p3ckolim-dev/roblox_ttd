@@ -1,4 +1,5 @@
 local DataStoreService = game:GetService("DataStoreService")
+local RunService = game:GetService("RunService")
 
 local AchievementConfig = require(game:GetService("ReplicatedStorage").Shared.Config.AchievementConfig)
 
@@ -9,6 +10,10 @@ local storeUnavailable = false
 local profiles = {}
 
 local function getStore()
+	if RunService:IsStudio() then
+		return nil
+	end
+
 	if storeUnavailable then
 		return nil
 	end
@@ -27,7 +32,6 @@ local function getStore()
 	end
 
 	storeUnavailable = true
-	warn("DataStore unavailable; using session memory for local Studio testing.")
 	return nil
 end
 

@@ -15,7 +15,7 @@ local MatchService = {}
 
 local MAX_PLAYERS = 6
 local MIN_PLAYERS = 1
-local START_COUNTDOWN = 10
+local START_COUNTDOWN = 3
 local COMBAT_STEP = 0.05
 local STATE_BROADCAST_INTERVAL = 0.2
 
@@ -25,6 +25,10 @@ local state = {
 	boards = {},
 	random = Random.new(),
 	currentWave = 0,
+	phase = "Lobby",
+	timeRemaining = 0,
+	phaseDuration = 0,
+	nextWave = 1,
 }
 
 local remotes = {}
@@ -44,10 +48,23 @@ local function snapshotFor(player)
 	local board = state.boards[player]
 	return {
 		status = state.status,
+		phase = state.phase,
+		timeRemaining = state.timeRemaining,
+		phaseDuration = state.phaseDuration,
+		nextWave = state.nextWave,
 		ready = state.ready[player] == true,
 		board = board and BoardService.Serialize(board) or nil,
 		rankings = MatchService.GetRankings(),
 	}
+end
+
+local function stepActiveBoards(deltaTime)
+	for _, board in pairs(state.boards) do
+		if not board.eliminated then
+			CombatService.StepBoard(board, deltaTime)
+			WorldService.RefreshCombat(board)
+		end
+	end
 end
 
 function MatchService.GetRankings()
@@ -59,6 +76,7 @@ function MatchService.GetRankings()
 			wave = board.wave,
 			score = board.score,
 			life = board.life,
+			aliveEnemyCount = board.aliveEnemyCount,
 			eliminated = board.eliminated,
 		})
 	end
@@ -111,6 +129,10 @@ end
 function MatchService.StartMatch()
 	state.status = "Running"
 	state.currentWave = 0
+	state.phase = "Wave"
+	state.timeRemaining = 0
+	state.phaseDuration = 0
+	state.nextWave = 1
 	state.boards = {}
 	WorldService.Clear()
 
@@ -119,6 +141,7 @@ function MatchService.StartMatch()
 			local board = BoardService.CreateBoard(player)
 			WorldService.AttachBoard(board, WorldService.CreateBoardModel(player, index))
 			state.boards[player] = board
+			WorldService.SpawnPlayerAtBoardCenter(player, board)
 			ShopService.RollShop(board, state.random)
 			SynergyService.Calculate(board)
 		end
@@ -132,32 +155,30 @@ end
 function MatchService.RunMatch()
 	for wave = 1, 30 do
 		state.currentWave = wave
+		state.phase = "Wave"
 		local broadcastElapsed = STATE_BROADCAST_INTERVAL
+		local waveElapsed = 0
+		local waveConfig = WaveService.GetWave(wave)
+		local waveDuration = waveConfig.durationSeconds or 45
+		state.timeRemaining = waveDuration
+		state.phaseDuration = waveDuration
+		state.nextWave = wave
 
 		for _, board in pairs(state.boards) do
 			if not board.eliminated then
 				WaveService.SpawnWave(board, wave)
 			end
 		end
+		MatchService.Broadcast()
 
-		while state.status == "Running" do
-			local allCleared = true
-			for _, board in pairs(state.boards) do
-				if not board.eliminated then
-					CombatService.StepBoard(board, COMBAT_STEP)
-					WorldService.RefreshCombat(board)
-					if not CombatService.IsWaveCleared(board) then
-						allCleared = false
-					end
-				end
-			end
+		while state.status == "Running" and waveElapsed < waveDuration do
+			stepActiveBoards(COMBAT_STEP)
+			waveElapsed += COMBAT_STEP
+			state.timeRemaining = math.max(0, waveDuration - waveElapsed)
 			broadcastElapsed += COMBAT_STEP
 			if broadcastElapsed >= STATE_BROADCAST_INTERVAL then
 				broadcastElapsed = 0
 				MatchService.Broadcast()
-			end
-			if allCleared then
-				break
 			end
 			task.wait(COMBAT_STEP)
 		end
@@ -171,7 +192,27 @@ function MatchService.RunMatch()
 		end
 
 		MatchService.Broadcast()
-		task.wait(START_COUNTDOWN)
+		if wave < 30 then
+			local intermissionElapsed = 0
+			broadcastElapsed = STATE_BROADCAST_INTERVAL
+			state.phase = "Intermission"
+			state.timeRemaining = START_COUNTDOWN
+			state.phaseDuration = START_COUNTDOWN
+			state.nextWave = wave + 1
+			MatchService.Broadcast()
+
+			while state.status == "Running" and intermissionElapsed < START_COUNTDOWN do
+				stepActiveBoards(COMBAT_STEP)
+				intermissionElapsed += COMBAT_STEP
+				state.timeRemaining = math.max(0, START_COUNTDOWN - intermissionElapsed)
+				broadcastElapsed += COMBAT_STEP
+				if broadcastElapsed >= STATE_BROADCAST_INTERVAL then
+					broadcastElapsed = 0
+					MatchService.Broadcast()
+				end
+				task.wait(COMBAT_STEP)
+			end
+		end
 	end
 
 	MatchService.EndMatch()
@@ -179,6 +220,9 @@ end
 
 function MatchService.EndMatch()
 	state.status = "Results"
+	state.phase = "Results"
+	state.timeRemaining = 0
+	state.phaseDuration = 0
 	local rankings = MatchService.GetRankings()
 	local rankByUserId = {}
 	for _, entry in ipairs(rankings) do
@@ -196,6 +240,10 @@ function MatchService.EndMatch()
 	MatchService.Broadcast()
 	task.wait(8)
 	state.status = "Lobby"
+	state.phase = "Lobby"
+	state.timeRemaining = 0
+	state.phaseDuration = 0
+	state.nextWave = 1
 	state.ready = {}
 	state.boards = {}
 	WorldService.Clear()
